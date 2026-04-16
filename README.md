@@ -1,0 +1,2 @@
+# pipepp-core
+pipe++ library
