@@ -22,15 +22,15 @@ public:
 
     template<typename Source>
         requires BusSource<std::decay_t<Source>, Config>
-    void register_scheme(fixed_string<Config::max_scheme_len> scheme) {
-        auto idx = count_.fetch_add(1, std::memory_order_acq_rel);
-        if (idx >= Config::max_schemes) {
-            count_.fetch_sub(1, std::memory_order_relaxed);
-            return;
-        }
+    bool register_scheme(fixed_string<Config::max_scheme_len> scheme) {
+        auto idx = count_.load(std::memory_order_acquire);
+        if (idx >= Config::max_schemes) return false;
         entries_[idx].scheme = scheme;
         entries_[idx].factory = &factory_impl<std::decay_t<Source>>;
         entries_[idx].context = nullptr;
+        std::atomic_thread_fence(std::memory_order_release);
+        count_.store(idx + 1, std::memory_order_release);
+        return true;
     }
 
     source_type create(std::string_view uri_or_scheme) const {

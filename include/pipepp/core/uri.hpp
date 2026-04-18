@@ -195,7 +195,11 @@ public:
     static basic_uri parse(std::string_view uri_str) {
         basic_uri result;
         auto r = result.storage_.checked_from(uri_str);
-        if (!r) return result;
+        if (!r) {
+            result.truncated_ = true;
+            result.storage_ = fixed_string<Config::max_uri_len>();
+            return result;
+        }
         result.view_ = parser_type::parse(std::string_view(result.storage_));
         rebind_view(result);
         return result;
@@ -210,6 +214,8 @@ public:
     const auto& storage() const noexcept { return storage_; }
 
     explicit operator bool() const noexcept { return !view_.empty(); }
+
+    bool truncated() const noexcept { return truncated_; }
 
 private:
     static void rebind_view(basic_uri& u) {
@@ -232,6 +238,7 @@ private:
 
     fixed_string<Config::max_uri_len> storage_{};
     uri_view view_{};
+    bool truncated_ = false;
 };
 
 using uri = basic_uri<default_config>;

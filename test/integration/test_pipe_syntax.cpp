@@ -31,3 +31,29 @@ TEST(PipeSyntaxTest, ConfigureOnly) {
         | configure([](auto&) -> result { return {}; })
         | sink([](const message_view&) {});
 }
+
+TEST(PipeSyntaxTest, PipeChainEmitAndReceive) {
+    std::string received;
+    auto pipe = basic_pipeline<CountingSource>(CountingSource{})
+        | subscribe("pipe/syntax", 0)
+        | transform([](basic_message<default_config>& m) { return true; })
+        | sink([&](const message_view& mv) { received = std::string(mv.topic); });
+    
+    std::byte data[] = {std::byte{0x01}};
+    message_view mv("pipe/syntax", data, 0);
+    pipe.emit(mv);
+    EXPECT_EQ(received, "pipe/syntax");
+}
+
+TEST(PipeSyntaxTest, PipeChainFilterDrops) {
+    bool sink_called = false;
+    auto pipe = basic_pipeline<CountingSource>(CountingSource{})
+        | subscribe("drop/#", 0)
+        | filter([](basic_message<default_config>&) { return false; })
+        | sink([&](const message_view&) { sink_called = true; });
+    
+    std::byte data[] = {std::byte{0x01}};
+    message_view mv("drop/test", data, 0);
+    pipe.emit(mv);
+    EXPECT_FALSE(sink_called);
+}

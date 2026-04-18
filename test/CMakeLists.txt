@@ -21,6 +21,9 @@ add_executable(pipepp-unit-tests
 
     unit/test_thread_safety.cpp
     unit/test_pipeline_factory.cpp
+    unit/test_spinlock.cpp
+    unit/test_run_emit.cpp
+    unit/test_capacity.cpp
 )
 target_link_libraries(pipepp-unit-tests PRIVATE pipepp-core GTest::gtest_main)
 target_include_directories(pipepp-unit-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

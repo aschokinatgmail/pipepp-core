@@ -5,6 +5,7 @@
 namespace pipepp::core {
 
 enum class error_code : uint8_t {
+    none = 0,
     buffer_overflow = 1,
     not_connected = 2,
     connection_failed = 3,
@@ -19,6 +20,7 @@ enum class error_code : uint8_t {
 
 inline constexpr const char* error_code_message(error_code ec) noexcept {
     switch (ec) {
+    case error_code::none:               return "no error";
     case error_code::buffer_overflow:   return "buffer overflow";
     case error_code::not_connected:     return "not connected";
     case error_code::connection_failed: return "connection failed";

@@ -65,7 +65,7 @@ template<typename Iterator>
 range_source(Iterator, Iterator) -> range_source<Iterator>;
 
 template<typename Range, typename Config = default_config>
-auto adapt(Range&& range) {
+auto adapt(Range& range) {
     using std::begin;
     using std::end;
     return range_source<decltype(begin(range)), Config>(begin(range), end(range));

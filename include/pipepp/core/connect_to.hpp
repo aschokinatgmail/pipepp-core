@@ -6,6 +6,15 @@
 
 namespace pipepp::core {
 
+/**
+ * Create a pipeline with a topic-remapping sink that forwards to another pipeline.
+ *
+ * WARNING: Lifetime requirements —
+ *   1. `target` must outlive the returned pipeline's sink (raw pointer is captured).
+ *   2. The `remap` callable must return a `string_view` whose data outlives the call.
+ *      Returning a view into `mv.topic` is safe; returning a view into a temporary
+ *      string is undefined behaviour.
+ */
 template<typename Source, typename Config, typename F>
 basic_pipeline<Source, Config> with_remap(basic_pipeline<Source, Config> pipe,
                                             basic_pipeline<Source, Config>* target,

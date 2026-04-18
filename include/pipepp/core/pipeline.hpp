@@ -43,9 +43,11 @@ public:
         , sink_(std::move(other.sink_))
         , subscriptions_(std::move(other.subscriptions_))
         , sub_count_(other.sub_count_)
-        , running_(other.running_.load(std::memory_order_relaxed))
+        , running_(false)
         , stage_lock_(std::move(other.stage_lock_))
-        , pending_error_(other.pending_error_) {}
+        , pending_error_(other.pending_error_) {
+        other.running_.store(false, std::memory_order_relaxed);
+    }
 
     basic_pipeline& operator=(basic_pipeline&& other) noexcept {
         if (this != &other) {
@@ -58,7 +60,7 @@ public:
             sink_ = std::move(other.sink_);
             subscriptions_ = std::move(other.subscriptions_);
             sub_count_ = other.sub_count_;
-            running_.store(other.running_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            running_.store(false, std::memory_order_relaxed);
             stage_lock_ = std::move(other.stage_lock_);
             pending_error_ = other.pending_error_;
         }
@@ -108,7 +110,7 @@ public:
     }
 
     result run() {
-        if (static_cast<uint8_t>(pending_error_) != 0)
+        if (pending_error_ != error_code::none)
             return result{unexpect, make_unexpected(pending_error_)};
 
         auto r = source_.connect(owned_uri_.view());
@@ -134,6 +136,7 @@ public:
 
         running_.store(true, std::memory_order_release);
         event_loop();
+        running_.store(false, std::memory_order_release);
         return {};
     }
 
@@ -159,7 +162,7 @@ public:
     bool is_running() const noexcept { return running_.load(std::memory_order_acquire); }
 
     result check() const noexcept {
-        if (static_cast<uint8_t>(pending_error_) != 0)
+        if (pending_error_ != error_code::none)
             return result{unexpect, make_unexpected(pending_error_)};
         return {};
     }
@@ -199,7 +202,7 @@ private:
     std::size_t sub_count_ = 0;
     std::atomic<bool> running_{false};
     spinlock stage_lock_;
-    error_code pending_error_{static_cast<error_code>(0)};
+    error_code pending_error_{error_code::none};
 };
 
 template<typename Source, typename Config = default_config>

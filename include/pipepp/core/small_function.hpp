@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
+#include <new>
 #include <utility>
 
 namespace pipepp::core {

@@ -27,11 +27,4 @@ concept BusSource = requires(T& t, uri_view uri, std::string_view topic,
     { t.poll() } -> std::same_as<void>;
 };
 
-template<typename T, typename Config = default_config>
-concept MessageHandler = requires(T& t, basic_message<Config>& msg) {
-    { t(msg) } -> std::same_as<bool>;
-} || requires(const T& t, message_view msg) {
-    { t(msg) } -> std::same_as<void>;
-};
-
 } // namespace pipepp::core

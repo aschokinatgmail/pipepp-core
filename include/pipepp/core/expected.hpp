@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <type_traits>
+#include <new>
 #include <utility>
 
 #include "error_code.hpp"
