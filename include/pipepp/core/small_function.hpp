@@ -37,14 +37,14 @@ public:
 
     small_function(small_function&& other) noexcept
         : invoke_fn_(other.invoke_fn_)
-        , const_destroy_fn_(other.const_destroy_fn_)
+        , destroy_fn_(other.destroy_fn_)
         , move_fn_(other.move_fn_) {
         if (move_fn_) {
             move_fn_(other.storage_.data(), storage_.data());
-            const_destroy_fn_(other.storage_.data());
+            destroy_fn_(other.storage_.data());
         }
         other.invoke_fn_ = nullptr;
-        other.const_destroy_fn_ = nullptr;
+        other.destroy_fn_ = nullptr;
         other.move_fn_ = nullptr;
     }
 
@@ -52,14 +52,14 @@ public:
         if (this != &other) {
             reset();
             invoke_fn_ = other.invoke_fn_;
-            const_destroy_fn_ = other.const_destroy_fn_;
+            destroy_fn_ = other.destroy_fn_;
             move_fn_ = other.move_fn_;
             if (move_fn_) {
                 move_fn_(other.storage_.data(), storage_.data());
-                const_destroy_fn_(other.storage_.data());
+                destroy_fn_(other.storage_.data());
             }
             other.invoke_fn_ = nullptr;
-            other.const_destroy_fn_ = nullptr;
+            other.destroy_fn_ = nullptr;
             other.move_fn_ = nullptr;
         }
         return *this;
@@ -67,7 +67,8 @@ public:
 
     ~small_function() { reset(); }
 
-    template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, small_function>>>
+    template<typename F>
+        requires (!std::is_same_v<std::decay_t<F>, small_function>)
     small_function(F&& f) {
         using Decayed = std::decay_t<F>;
         static_assert(sizeof(Decayed) <= N,
@@ -77,7 +78,7 @@ public:
 
         ::new (storage_.data()) Decayed(std::forward<F>(f));
         invoke_fn_ = &invoke_impl<Decayed>;
-        const_destroy_fn_ = &destroy_impl<Decayed>;
+        destroy_fn_ = &destroy_impl<Decayed>;
         move_fn_ = &move_impl<Decayed>;
     }
 
@@ -88,11 +89,11 @@ public:
     explicit operator bool() const noexcept { return invoke_fn_ != nullptr; }
 
     void reset() noexcept {
-        if (const_destroy_fn_) {
-            const_destroy_fn_(storage_.data());
+        if (destroy_fn_) {
+            destroy_fn_(storage_.data());
         }
         invoke_fn_ = nullptr;
-        const_destroy_fn_ = nullptr;
+        destroy_fn_ = nullptr;
         move_fn_ = nullptr;
     }
 
@@ -117,7 +118,7 @@ private:
     using move_fn_t = void(*)(void*, void*) noexcept;
 
     invoke_fn_t invoke_fn_ = nullptr;
-    destroy_fn_t const_destroy_fn_ = nullptr;
+    destroy_fn_t destroy_fn_ = nullptr;
     move_fn_t move_fn_ = nullptr;
     small_function_storage<N> storage_;
 };

@@ -112,6 +112,15 @@ TEST(SourceRegistryTest, MultipleSchemes) {
     EXPECT_FALSE(reg.has_scheme("mqtt"));
 }
 
+TEST(SourceRegistryTest, CreateFromFullUri) {
+    source_registry<default_config> reg;
+    reg.register_scheme<MockSource>("mock");
+    auto src = reg.create("mock://host:1883/topic");
+    EXPECT_TRUE(static_cast<bool>(src));
+    EXPECT_TRUE(src.connect().has_value());
+    EXPECT_TRUE(src.is_connected());
+}
+
 TEST(SourceFactoryTest, CreateAnySource) {
     auto src = source_factory<default_config>::create<MockSource>();
     EXPECT_TRUE(static_cast<bool>(src));

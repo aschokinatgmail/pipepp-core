@@ -202,6 +202,18 @@ TEST(UriTest, BasicUriOverflowReturnsEmpty) {
     EXPECT_FALSE(static_cast<bool>(u));
 }
 
+TEST(UriTest, BasicUriTruncatedFlagFalse) {
+    auto u = basic_uri<default_config>::parse("mqtt://broker:1883/topic");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, BasicUriTruncatedFlagTrue) {
+    auto u = basic_uri<tiny_config>::parse("mqtt://very-long-host:1883/topic");
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_TRUE(u.truncated());
+}
+
 TEST(UriTest, BasicUriRebindPreservesOffsets) {
     auto u = basic_uri<default_config>::parse("mqtt://broker:1883/sensors/temp?qos=1#frag");
     EXPECT_TRUE(static_cast<bool>(u));

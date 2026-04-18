@@ -31,7 +31,8 @@ public:
     constexpr fixed_string(std::string_view sv)
         : fixed_string(sv.data(), sv.size()) {}
 
-    template<std::size_t M, typename = std::enable_if_t<(M <= N)>>
+    template<std::size_t M>
+        requires (M <= N)
     constexpr fixed_string(const fixed_string<M>& other) : size_(other.size()) {
         for (std::size_t i = 0; i < other.size(); ++i)
             data_[i] = other[i];
@@ -93,7 +94,7 @@ public:
 
 private:
     char data_[N + 1]{};
-    std::size_t size_;
+    std::size_t size_ = 0;
 };
 
 template<std::size_t N>

@@ -26,9 +26,12 @@ TEST(PipelineOpsTest, TransformReturningZeroDropsMessage) {
 }
 
 TEST(PipelineOpsTest, ExecuteFreeFunction) {
-    auto pipe = basic_pipeline<MockSource>(MockSource{});
-    pipe.subscribe("test/topic", 0);
-    EXPECT_FALSE(pipe.is_running());
+    auto pipe = basic_pipeline<SelfStoppingSource>(SelfStoppingSource{});
+    int sink_count = 0;
+    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    auto r = execute(pipe);
+    EXPECT_TRUE(r.has_value());
+    EXPECT_GE(sink_count, 1);
 }
 
 TEST(PipelineOpsTest, PipeSyntaxSinkReceivesMessage) {
@@ -83,9 +86,12 @@ TEST(PipelineOpsTest, SubscribeWithQos) {
 
 TEST(PipelineOpsTest, ConfigureAppliedViaPipe) {
     int config_count = 0;
-    auto pipe = basic_pipeline<MockSource>(MockSource{})
+    auto pipe = basic_pipeline<SelfStoppingSource>(SelfStoppingSource{})
         | configure([&](auto&) -> result { ++config_count; return {}; })
         | sink([](const message_view&) {});
+    auto r = pipe.run();
+    EXPECT_TRUE(r.has_value());
+    EXPECT_EQ(config_count, 1);
 }
 
 TEST(PipelineOpsTest, EmitWithoutSinkDoesNotCrash) {

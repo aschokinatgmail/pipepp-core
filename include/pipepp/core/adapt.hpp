@@ -51,6 +51,7 @@ public:
             }
             ++current_;
         }
+        connected_ = false;
     }
 
 private:

@@ -32,7 +32,8 @@ public:
     explicit operator bool() const noexcept { return static_cast<bool>(fn_); }
 
 private:
-    template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, config_fn>>>
+    template<typename F>
+        requires (!std::is_same_v<std::decay_t<F>, config_fn>)
     explicit config_fn(F&& f) : fn_(std::forward<F>(f)) {}
 
     small_function<result(void*), Config::small_fn_size> fn_;
@@ -43,7 +44,8 @@ class process_fn {
 public:
     process_fn() = default;
 
-    template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, process_fn>>>
+    template<typename F>
+        requires (!std::is_same_v<std::decay_t<F>, process_fn>)
     process_fn(F&& f) : fn_(std::forward<F>(f)) {}
 
     bool operator()(basic_message<Config>& msg) const {
@@ -61,7 +63,8 @@ class sink_fn {
 public:
     sink_fn() = default;
 
-    template<typename F, typename = std::enable_if_t<!std::is_same_v<std::decay_t<F>, sink_fn>>>
+    template<typename F>
+        requires (!std::is_same_v<std::decay_t<F>, sink_fn>)
     sink_fn(F&& f) : fn_(std::forward<F>(f)) {}
 
     void operator()(const message_view& msg) const {

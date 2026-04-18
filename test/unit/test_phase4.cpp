@@ -53,6 +53,25 @@ TEST(AdaptTest, RangeSourceWithPipeline) {
     auto pipe = basic_pipeline<decltype(src)>(std::move(src))
         | filter([](basic_message<default_config>&) { return true; })
         | sink([&](const message_view&) { ++count; });
+    auto r = pipe.run();
+    EXPECT_TRUE(r.has_value());
+    EXPECT_GT(count, 0);
+}
+
+TEST(AdaptTest, RangeSourceCompletesAfterExhaustion) {
+    std::byte data[] = {std::byte{0x01}};
+    message_view msgs[] = {
+        message_view("complete/a", data, 0),
+        message_view("complete/b", data, 1)
+    };
+    auto src = adapt(msgs);
+    int count = 0;
+    auto pipe = basic_pipeline<decltype(src)>(std::move(src))
+        | sink([&](const message_view&) { ++count; });
+    auto r = pipe.run();
+    EXPECT_TRUE(r.has_value());
+    EXPECT_FALSE(pipe.is_running());
+    EXPECT_EQ(count, 2);
 }
 
 TEST(AsRangeTest, SinkBufferPushAndAccess) {

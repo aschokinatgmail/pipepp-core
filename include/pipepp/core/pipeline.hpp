@@ -71,6 +71,10 @@ public:
         if (sub_count_ < Config::max_subscriptions) {
             auto& sub = subscriptions_[sub_count_++];
             auto r = sub.topic.checked_from(topic);
+            if (!r) {
+                pending_error_ = error_code::buffer_overflow;
+                return *this;
+            }
             sub.qos = qos;
         } else {
             pending_error_ = error_code::capacity_exceeded;
@@ -137,6 +141,7 @@ public:
         running_.store(true, std::memory_order_release);
         event_loop();
         running_.store(false, std::memory_order_release);
+        source_.disconnect();
         return {};
     }
 

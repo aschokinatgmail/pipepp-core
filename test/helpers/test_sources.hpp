@@ -63,3 +63,28 @@ struct FullSource {
     void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
     void poll() {}
 };
+
+struct SelfStoppingSource {
+    bool connected = false;
+    int poll_count = 0;
+    int max_polls = 1;
+    message_callback<default_config> callback;
+
+    result connect(uri_view = {}) { connected = true; poll_count = 0; return {}; }
+    result disconnect() { connected = false; return {}; }
+    bool is_connected() const { return connected; }
+    result subscribe(std::string_view, int) { return {}; }
+    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
+    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
+    void poll() {
+        ++poll_count;
+        if (callback && poll_count <= max_polls) {
+            std::byte data[] = {std::byte{0x01}};
+            message_view mv("auto/topic", data, 0);
+            callback(mv);
+        }
+        if (poll_count >= max_polls) {
+            connected = false;
+        }
+    }
+};

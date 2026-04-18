@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cstddef>
 #include <type_traits>
 #include <new>
@@ -82,8 +83,8 @@ public:
     constexpr const T& operator*() const& { return val_; }
     constexpr T&& operator*() && { return std::move(val_); }
 
-    constexpr E& error() & { return err_; }
-    constexpr const E& error() const& { return err_; }
+    constexpr E& error() & { assert(!has_value_); return err_; }
+    constexpr const E& error() const& { assert(!has_value_); return err_; }
 
     template<typename U>
     constexpr T value_or(U&& default_val) const& {
@@ -148,8 +149,8 @@ public:
     constexpr bool has_value() const noexcept { return has_value_; }
     constexpr explicit operator bool() const noexcept { return has_value_; }
 
-    constexpr E& error() & { return err_; }
-    constexpr const E& error() const& { return err_; }
+    constexpr E& error() & { assert(!has_value_); return err_; }
+    constexpr const E& error() const& { assert(!has_value_); return err_; }
 
     void value() const noexcept {}
 

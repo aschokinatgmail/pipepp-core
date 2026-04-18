@@ -42,14 +42,15 @@ public:
         auto count = count_.load(std::memory_order_acquire);
         for (std::size_t i = 0; i < count; ++i) {
             if (entries_[i].scheme == scheme) {
-                uri_view uri;
                 if (scheme_end != std::string_view::npos) {
-                    uri = basic_uri<Config>::parse(uri_or_scheme).view();
+                    auto parsed = basic_uri<Config>::parse(uri_or_scheme);
+                    return entries_[i].factory(entries_[i].context, parsed.view());
                 } else {
+                    uri_view uri;
                     uri.scheme = scheme;
                     uri.full_str = uri_or_scheme;
+                    return entries_[i].factory(entries_[i].context, uri);
                 }
-                return entries_[i].factory(entries_[i].context, uri);
             }
         }
         return source_type{};
