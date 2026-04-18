@@ -26,7 +26,7 @@ jobs:
     name: ${{ matrix.name }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build
         run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }} .
@@ -40,7 +40,7 @@ jobs:
     name: Coverage
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build
         run: docker build -f Dockerfile.coverage -t pipepp-core-coverage .
