@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu 24.04 (GCC 14)
+            dockerfile: Dockerfile
+            image: pipepp-core-ubuntu
+          - name: Alpine 3.21 (GCC 14 -Os)
+            dockerfile: Dockerfile.alpine
+            image: pipepp-core-alpine
+          - name: Fedora 42 (GCC 15)
+            dockerfile: Dockerfile.fedora
+            image: pipepp-core-fedora
+
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.image }} .
+
+      - name: Test
+        run: docker run --rm ${{ matrix.image }}
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    name: Coverage
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -f Dockerfile.coverage -t pipepp-core-coverage .
+
+      - name: Generate report
+        run: docker run --rm pipepp-core-coverage
