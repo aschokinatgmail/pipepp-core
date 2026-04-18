@@ -1,0 +1,22 @@
+#pragma once
+
+#include "pipepp/core/config.hpp"
+#include "pipepp/core/error_code.hpp"
+#include "pipepp/core/expected.hpp"
+#include "pipepp/core/fixed_string.hpp"
+#include "pipepp/core/message.hpp"
+#include "pipepp/core/message_callback.hpp"
+#include "pipepp/core/small_function.hpp"
+#include "pipepp/core/stages.hpp"
+#include "pipepp/core/uri.hpp"
+#include "pipepp/core/spinlock.hpp"
+
+#include "pipepp/core/concepts.hpp"
+#include "pipepp/core/any_source.hpp"
+#include "pipepp/core/as_range.hpp"
+#include "pipepp/core/pipeline.hpp"
+#include "pipepp/core/pipeline_ops.hpp"
+#include "pipepp/core/source_registry.hpp"
+#include "pipepp/core/adapt.hpp"
+#include "pipepp/core/connect_to.hpp"
+#include "pipepp/core/pipeline_factory.hpp"

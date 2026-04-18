@@ -1,0 +1,16 @@
+FROM alpine:3.21
+
+RUN apk add --no-cache \
+    g++ \
+    cmake \
+    make \
+    gtest-dev \
+    linux-headers
+
+WORKDIR /src
+
+COPY CMakeLists.txt .
+COPY include/ include/
+COPY test/ test/
+
+CMD ["sh", "-c", "cmake -B build -DCMAKE_CXX_COMPILER=g++ -DPIPEPP_CORE_BUILD_TESTS=ON -DCMAKE_CXX_FLAGS='-std=c++20 -fno-rtti -fno-exceptions -Os' && cmake --build build --parallel && cd build && ctest --output-on-failure"]
