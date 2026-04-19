@@ -105,7 +105,7 @@ basic_pipeline<Source, Config> operator|(basic_pipeline<Source, Config> pipe, su
 }
 
 template<typename Source, typename Config>
-result execute(basic_pipeline<Source, Config>& pipe) {
+[[nodiscard]] result execute(basic_pipeline<Source, Config>& pipe) {
     return pipe.run();
 }
 
