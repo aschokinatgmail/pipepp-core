@@ -82,14 +82,22 @@ public:
         return std::string_view(data_, size_) < sv;
     }
 
-    constexpr result checked_from(std::string_view sv) {
+    [[nodiscard]] result checked_from(std::string_view sv) {
         if (sv.size() > N)
             return result{unexpect, make_unexpected(error_code::buffer_overflow)};
         size_ = sv.size();
         for (std::size_t i = 0; i < size_; ++i)
             data_[i] = sv[i];
         data_[size_] = '\0';
+        assert(size_ <= N);
         return {};
+    }
+
+    void from_or_truncate(std::string_view sv) noexcept {
+        size_ = std::min(sv.size(), N);
+        for (std::size_t i = 0; i < size_; ++i)
+            data_[i] = sv[i];
+        data_[size_] = '\0';
     }
 
 private:

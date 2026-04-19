@@ -28,7 +28,11 @@ public:
     using subscription_type = subscription<Config>;
 
     explicit basic_pipeline(Source src) : source_(std::move(src)) {}
-    explicit basic_pipeline(Source src, std::string_view uri_str) : source_(std::move(src)), owned_uri_(basic_uri<Config>::parse_or_default(uri_str)) {}
+    explicit basic_pipeline(Source src, std::string_view uri_str) : source_(std::move(src)), owned_uri_(basic_uri<Config>::parse_or_default(uri_str)) {
+        if (owned_uri_.truncated()) {
+            pending_error_ = error_code::invalid_uri;
+        }
+    }
 
     basic_pipeline(const basic_pipeline&) = delete;
     basic_pipeline& operator=(const basic_pipeline&) = delete;
@@ -110,10 +114,13 @@ public:
 
     basic_pipeline& connect_uri(std::string_view uri_str) {
         owned_uri_ = basic_uri<Config>::parse_or_default(uri_str);
+        if (owned_uri_.truncated()) {
+            pending_error_ = error_code::invalid_uri;
+        }
         return *this;
     }
 
-    result run() {
+    [[nodiscard]] result run() {
         if (pending_error_ != error_code::none)
             return result{unexpect, make_unexpected(pending_error_)};
 
@@ -166,7 +173,7 @@ public:
 
     bool is_running() const noexcept { return running_.load(std::memory_order_acquire); }
 
-    result check() const noexcept {
+    [[nodiscard]] result check() const noexcept {
         if (pending_error_ != error_code::none)
             return result{unexpect, make_unexpected(pending_error_)};
         return {};

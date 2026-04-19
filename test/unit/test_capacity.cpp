@@ -68,4 +68,33 @@ TEST(CapacityTest, ConfigureOverflowBlocksRun) {
     EXPECT_EQ(r.error(), error_code::capacity_exceeded);
 }
 
+TEST(CapacityTest, AddStageOverflowDetectedByCheck) {
+    basic_pipeline<MockSource> pipe(MockSource{});
+    for (std::size_t i = 0; i < default_config::max_stages + 1; ++i) {
+        pipe.add_stage([](basic_message<default_config>&) { return true; });
+    }
+    auto r = pipe.check();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::capacity_exceeded);
+}
+
+TEST(CapacityTest, AddStageOverflowBlocksRun) {
+    basic_pipeline<MockSource> pipe(MockSource{});
+    for (std::size_t i = 0; i < default_config::max_stages + 1; ++i) {
+        pipe.add_stage([](basic_message<default_config>&) { return true; });
+    }
+    auto r = pipe.run();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::capacity_exceeded);
+}
+
+TEST(CapacityTest, AddStageWithinCapacityNoError) {
+    basic_pipeline<MockSource> pipe(MockSource{});
+    for (std::size_t i = 0; i < default_config::max_stages; ++i) {
+        pipe.add_stage([](basic_message<default_config>&) { return true; });
+    }
+    auto r = pipe.check();
+    EXPECT_TRUE(r.has_value());
+}
+
 }

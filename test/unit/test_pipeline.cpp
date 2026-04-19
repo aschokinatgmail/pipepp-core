@@ -120,3 +120,45 @@ TEST(PipelineTest, ConnectUriStoresOwnedCopy) {
     auto check_result = pipe.check();
     EXPECT_TRUE(check_result.has_value());
 }
+
+TEST(PipelineTest, ConnectUriTruncatedReturnsInvalidUri) {
+    basic_pipeline<MockSource> pipe(MockSource{});
+    std::string long_uri(512, 'x');
+    pipe.connect_uri(long_uri);
+    auto r = pipe.check();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::invalid_uri);
+}
+
+TEST(PipelineTest, ConnectUriTruncatedBlocksRun) {
+    basic_pipeline<MockSource> pipe(MockSource{});
+    std::string long_uri(512, 'x');
+    pipe.connect_uri(long_uri);
+    auto r = pipe.run();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::invalid_uri);
+}
+
+struct tiny_pipe_config : default_config {
+    static constexpr std::size_t max_uri_len = 8;
+};
+
+TEST(PipelineTest, ConstructorWithTruncatedUriReturnsInvalidUri) {
+    basic_pipeline<MockSource, tiny_pipe_config> pipe(MockSource{}, "mqtt://very-long-host:1883/topic");
+    auto r = pipe.check();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::invalid_uri);
+}
+
+TEST(PipelineTest, ConstructorWithTruncatedUriBlocksRun) {
+    basic_pipeline<MockSource, tiny_pipe_config> pipe(MockSource{}, "mqtt://very-long-host:1883/topic");
+    auto r = pipe.run();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::invalid_uri);
+}
+
+TEST(PipelineTest, ConstructorWithValidUriNoError) {
+    basic_pipeline<MockSource, tiny_pipe_config> pipe(MockSource{}, "a://b");
+    auto r = pipe.check();
+    EXPECT_TRUE(r.has_value());
+}
