@@ -125,3 +125,117 @@ TEST(SourceFactoryTest, CreateAnySource) {
     auto src = source_factory<default_config>::create<MockSource>();
     EXPECT_TRUE(static_cast<bool>(src));
 }
+
+TEST(AnySourceTest, FullSourceConnectDisconnect) {
+    any_source<default_config> src(FullSource{});
+    EXPECT_TRUE(src.connect().has_value());
+    EXPECT_TRUE(src.is_connected());
+    EXPECT_TRUE(src.disconnect().has_value());
+    EXPECT_FALSE(src.is_connected());
+}
+
+TEST(AnySourceTest, FullSourceSubscribeRecordsTopicAndQos) {
+    any_source<default_config> src(FullSource{});
+    auto r = src.subscribe("sensors/temp", 2);
+    EXPECT_TRUE(r.has_value());
+}
+
+TEST(AnySourceTest, FullSourcePublishIncrements) {
+    any_source<default_config> src(FullSource{});
+    std::byte data[] = {std::byte{0x01}, std::byte{0x02}};
+    EXPECT_TRUE(src.publish("out/topic", data, 1).has_value());
+}
+
+TEST(AnySourceTest, FullSourceSetCallbackAndPoll) {
+    any_source<default_config> src(FullSource{});
+    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.poll();
+}
+
+TEST(AnySourceTest, CountingSourceAllMethods) {
+    any_source<default_config> src(CountingSource{});
+    EXPECT_TRUE(src.connect().has_value());
+    EXPECT_TRUE(src.is_connected());
+    EXPECT_TRUE(src.subscribe("a/b", 0).has_value());
+    std::byte data[] = {std::byte{0xFF}};
+    EXPECT_TRUE(src.publish("c/d", data, 1).has_value());
+    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.poll();
+    EXPECT_TRUE(src.disconnect().has_value());
+    EXPECT_FALSE(src.is_connected());
+}
+
+TEST(AnySourceTest, SelfStoppingSourceCallbackAndPoll) {
+    any_source<default_config> src(SelfStoppingSource{});
+    src.connect();
+    bool called = false;
+    src.set_message_callback(message_callback<default_config>([&](const message_view& mv) {
+        called = true;
+        EXPECT_EQ(mv.topic, "auto/topic");
+    }));
+    src.poll();
+    EXPECT_TRUE(called);
+    EXPECT_FALSE(src.is_connected());
+}
+
+TEST(AnySourceTest, MoveConstructFromFullSource) {
+    any_source<default_config> src1(FullSource{});
+    src1.connect();
+    any_source<default_config> src2 = std::move(src1);
+    EXPECT_FALSE(static_cast<bool>(src1));
+    EXPECT_TRUE(static_cast<bool>(src2));
+    EXPECT_TRUE(src2.is_connected());
+    EXPECT_TRUE(src2.disconnect().has_value());
+}
+
+TEST(AnySourceTest, MoveAssignFullSourceToEmpty) {
+    any_source<default_config> src1(FullSource{});
+    any_source<default_config> src2;
+    src2 = std::move(src1);
+    EXPECT_FALSE(static_cast<bool>(src1));
+    EXPECT_TRUE(static_cast<bool>(src2));
+    EXPECT_TRUE(src2.connect().has_value());
+    EXPECT_TRUE(src2.is_connected());
+}
+
+TEST(AnySourceTest, MoveAssignBetweenDifferentTypes) {
+    any_source<default_config> src1(FullSource{});
+    src1.connect();
+    any_source<default_config> src2(CountingSource{});
+    src2 = std::move(src1);
+    EXPECT_TRUE(src2.is_connected());
+    EXPECT_FALSE(static_cast<bool>(src1));
+    EXPECT_TRUE(src2.subscribe("x/y", 1).has_value());
+    std::byte d[] = {std::byte{0x00}};
+    EXPECT_TRUE(src2.publish("x/y", d, 0).has_value());
+    EXPECT_TRUE(src2.disconnect().has_value());
+}
+
+TEST(AnySourceTest, ResetThenAllMethodsReturnDefaults) {
+    any_source<default_config> src(FullSource{});
+    src.connect();
+    src.reset();
+    EXPECT_FALSE(static_cast<bool>(src));
+    EXPECT_FALSE(src.is_connected());
+    EXPECT_TRUE(src.disconnect().has_value());
+    EXPECT_TRUE(src.subscribe("t", 0).has_value());
+    std::byte d[] = {std::byte{0x00}};
+    EXPECT_TRUE(src.publish("t", d, 0).has_value());
+    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.poll();
+}
+
+TEST(AnySourceTest, NullSourceAllMethodDefaults) {
+    any_source<default_config> src;
+    EXPECT_FALSE(src.is_connected());
+    auto r = src.connect();
+    EXPECT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), error_code::not_connected);
+    EXPECT_TRUE(src.disconnect().has_value());
+    EXPECT_TRUE(src.subscribe("t", 0).has_value());
+    std::byte d[] = {std::byte{0x00}};
+    EXPECT_TRUE(src.publish("t", d, 0).has_value());
+    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.poll();
+    src.reset();
+}

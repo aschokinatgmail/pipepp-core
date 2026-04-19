@@ -334,3 +334,152 @@ TEST(UriTest, FixedStringLiteralNttpParse) {
     EXPECT_EQ(v.port, "80");
     EXPECT_EQ(v.path, "/path");
 }
+
+TEST(UriTest, EmbeddedConfigParseAllFields) {
+    auto u = basic_uri<embedded_config>::parse("mqtt://broker:1883/sensors/temp?qos=1#frag");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+    EXPECT_EQ(u.view().scheme, "mqtt");
+    EXPECT_EQ(u.view().host, "broker");
+    EXPECT_EQ(u.view().port, "1883");
+    EXPECT_EQ(u.view().path, "/sensors/temp");
+    EXPECT_EQ(u.view().query, "qos=1");
+    EXPECT_EQ(u.view().fragment, "frag");
+}
+
+TEST(UriTest, EmbeddedConfigParseOverflow) {
+    std::string long_uri(200, 'a');
+    auto u = basic_uri<embedded_config>::parse(long_uri);
+    EXPECT_TRUE(u.truncated());
+    EXPECT_FALSE(static_cast<bool>(u));
+}
+
+TEST(UriTest, EmbeddedConfigParseOrDefaultEmpty) {
+    auto u = basic_uri<embedded_config>::parse_or_default("");
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, EmbeddedConfigParseOrDefaultNonEmpty) {
+    auto u = basic_uri<embedded_config>::parse_or_default("tcp://host/path");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_EQ(u.view().scheme, "tcp");
+    EXPECT_EQ(u.view().host, "host");
+    EXPECT_EQ(u.view().path, "/path");
+}
+
+TEST(UriTest, EmbeddedConfigParseEmpty) {
+    auto u = basic_uri<embedded_config>::parse("");
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, RfcConfigBasicUriParseAllFields) {
+    auto u = basic_uri<rfc_config>::parse("mqtt://broker:1883/path?q=1#frag");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+    EXPECT_EQ(u.view().scheme, "mqtt");
+    EXPECT_EQ(u.view().host, "broker");
+    EXPECT_EQ(u.view().port, "1883");
+    EXPECT_EQ(u.view().authority, "broker:1883");
+    EXPECT_EQ(u.view().path, "/path");
+    EXPECT_EQ(u.view().query, "q=1");
+    EXPECT_EQ(u.view().fragment, "frag");
+}
+
+TEST(UriTest, RfcConfigBasicUriParseOrDefaultEmpty) {
+    auto u = basic_uri<rfc_config>::parse_or_default("");
+    EXPECT_FALSE(static_cast<bool>(u));
+}
+
+TEST(UriTest, RfcConfigBasicUriParseOrDefaultNonEmpty) {
+    auto u = basic_uri<rfc_config>::parse_or_default("mqtt://broker:1883/topic");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_EQ(u.view().scheme, "mqtt");
+    EXPECT_EQ(u.view().host, "broker");
+    EXPECT_EQ(u.view().port, "1883");
+}
+
+TEST(UriTest, RfcConfigBasicUriParseEmpty) {
+    auto u = basic_uri<rfc_config>::parse("");
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, TinyConfigExactFitNoTruncation) {
+    auto u = basic_uri<tiny_config>::parse("tcp://ab");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+    EXPECT_EQ(u.view().scheme, "tcp");
+    EXPECT_EQ(u.view().host, "ab");
+}
+
+TEST(UriTest, BasicUriDefaultConstructedIsFalse) {
+    basic_uri<default_config> u;
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, EmbeddedConfigDefaultConstructedIsFalse) {
+    basic_uri<embedded_config> u;
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, RfcConfigDefaultConstructedIsFalse) {
+    basic_uri<rfc_config> u;
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, BasicUriParseWithAuthorityUserinfo) {
+    auto u = basic_uri<default_config>::parse("mqtt://user:pass@broker:1883/topic?q=1#frag");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+    EXPECT_EQ(u.view().authority, "user:pass@broker:1883");
+    EXPECT_EQ(u.view().host, "broker");
+    EXPECT_EQ(u.view().port, "1883");
+    EXPECT_EQ(u.view().path, "/topic");
+    EXPECT_EQ(u.view().query, "q=1");
+    EXPECT_EQ(u.view().fragment, "frag");
+}
+
+TEST(UriTest, RfcConfigParseIpv6AllFields) {
+    auto u = basic_uri<rfc_config>::parse("mqtt://[::1]:1883/path?q=1#frag");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+    EXPECT_EQ(u.view().host, "[::1]");
+    EXPECT_EQ(u.view().port, "1883");
+    EXPECT_EQ(u.view().path, "/path");
+    EXPECT_EQ(u.view().query, "q=1");
+    EXPECT_EQ(u.view().fragment, "frag");
+}
+
+TEST(UriTest, BasicUriParseSchemelessAllFields) {
+    auto u = basic_uri<default_config>::parse("/path?key=val#frag");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_EQ(u.view().scheme, "");
+    EXPECT_EQ(u.view().host, "");
+    EXPECT_EQ(u.view().port, "");
+    EXPECT_EQ(u.view().path, "/path");
+    EXPECT_EQ(u.view().query, "key=val");
+    EXPECT_EQ(u.view().fragment, "frag");
+}
+
+TEST(UriTest, EmbeddedConfigParseWithUserinfo) {
+    auto u = basic_uri<embedded_config>::parse("mqtt://user@host:123/p?q=1#f");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_EQ(u.view().authority, "user@host:123");
+    EXPECT_EQ(u.view().host, "host");
+    EXPECT_EQ(u.view().port, "123");
+    EXPECT_EQ(u.view().path, "/p");
+    EXPECT_EQ(u.view().query, "q=1");
+    EXPECT_EQ(u.view().fragment, "f");
+}
+
+TEST(UriTest, TinyConfigOverflowOneOver) {
+    std::string uri(9, 'x');
+    auto u = basic_uri<tiny_config>::parse(uri);
+    EXPECT_TRUE(u.truncated());
+    EXPECT_FALSE(static_cast<bool>(u));
+}

@@ -88,3 +88,69 @@ struct SelfStoppingSource {
         }
     }
 };
+
+struct FaultSource {
+    bool connected = false;
+    bool fail_connect = false;
+    bool fail_subscribe = false;
+    bool fail_disconnect = false;
+    int connect_count = 0;
+    int disconnect_count = 0;
+    int subscribe_count = 0;
+    int poll_count = 0;
+    int max_polls = 1;
+    message_callback<default_config> callback;
+
+    result connect(uri_view = {}) {
+        ++connect_count;
+        if (fail_connect) return result{unexpect, make_unexpected(error_code::connection_failed)};
+        connected = true;
+        return {};
+    }
+    result disconnect() {
+        ++disconnect_count;
+        connected = false;
+        if (fail_disconnect) return result{unexpect, make_unexpected(error_code::disconnected)};
+        return {};
+    }
+    bool is_connected() const { return connected; }
+    result subscribe(std::string_view, int) {
+        ++subscribe_count;
+        if (fail_subscribe) return result{unexpect, make_unexpected(error_code::invalid_argument)};
+        return {};
+    }
+    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
+    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
+    void poll() {
+        ++poll_count;
+        if (callback && poll_count <= max_polls) {
+            std::byte data[] = {std::byte{0x42}};
+            message_view mv("fault/topic", data, 1);
+            callback(mv);
+        }
+        if (poll_count >= max_polls) connected = false;
+    }
+};
+
+struct CallbackPollSource {
+    bool connected = false;
+    int poll_count = 0;
+    int max_polls = 2;
+    message_callback<default_config> callback;
+
+    result connect(uri_view = {}) { connected = true; poll_count = 0; return {}; }
+    result disconnect() { connected = false; return {}; }
+    bool is_connected() const { return connected; }
+    result subscribe(std::string_view, int) { return {}; }
+    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
+    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
+    void poll() {
+        ++poll_count;
+        if (callback && poll_count <= max_polls) {
+            std::byte data[] = {std::byte{0x01}};
+            message_view mv("cb/topic", data, 0);
+            callback(mv);
+        }
+        if (poll_count >= max_polls) connected = false;
+    }
+};
