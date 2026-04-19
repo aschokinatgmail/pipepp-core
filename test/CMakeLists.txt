@@ -18,6 +18,7 @@ add_executable(pipepp-unit-tests
     unit/test_any_source.cpp
     unit/test_phase4.cpp
     unit/test_uri.cpp
+    unit/test_source_registry.cpp
 
     unit/test_thread_safety.cpp
     unit/test_pipeline_factory.cpp
@@ -35,6 +36,7 @@ gtest_discover_tests(pipepp-unit-tests TEST_LIST UNIT_TESTS)
 add_executable(pipepp-integration-tests
     integration/test_pipeline_flow.cpp
     integration/test_pipe_syntax.cpp
+    integration/test_connect_to.cpp
 )
 target_link_libraries(pipepp-integration-tests PRIVATE pipepp-core GTest::gtest_main)
 target_include_directories(pipepp-integration-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

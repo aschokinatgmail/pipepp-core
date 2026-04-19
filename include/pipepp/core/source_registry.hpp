@@ -8,6 +8,7 @@
 #include "any_source.hpp"
 #include "config.hpp"
 #include "fixed_string.hpp"
+#include "small_function.hpp"
 #include "uri.hpp"
 
 namespace pipepp::core {
@@ -16,7 +17,7 @@ template<typename Config = default_config>
 class source_registry {
 public:
     using source_type = any_source<Config>;
-    using factory_fn = source_type(*)(void*, uri_view);
+    using factory_fn = small_function<source_type(uri_view), Config::small_fn_size>;
 
     source_registry() = default;
 
@@ -26,11 +27,27 @@ public:
         auto idx = count_.load(std::memory_order_acquire);
         if (idx >= Config::max_schemes) return false;
         entries_[idx].scheme = scheme;
-        entries_[idx].factory = &factory_impl<std::decay_t<Source>>;
-        entries_[idx].context = nullptr;
+        entries_[idx].factory = make_factory<std::decay_t<Source>>();
         std::atomic_thread_fence(std::memory_order_release);
         count_.store(idx + 1, std::memory_order_release);
         return true;
+    }
+
+    template<typename Source, typename F>
+        requires BusSource<std::decay_t<Source>, Config>
+    bool register_scheme(fixed_string<Config::max_scheme_len> scheme, F&& factory_fn) {
+        auto idx = count_.load(std::memory_order_acquire);
+        if (idx >= Config::max_schemes) return false;
+        entries_[idx].scheme = scheme;
+        entries_[idx].factory = std::forward<F>(factory_fn);
+        std::atomic_thread_fence(std::memory_order_release);
+        count_.store(idx + 1, std::memory_order_release);
+        return true;
+    }
+
+    template<auto Uri>
+    source_type create() const {
+        return create(static_cast<std::string_view>(Uri));
     }
 
     source_type create(std::string_view uri_or_scheme) const {
@@ -44,12 +61,12 @@ public:
             if (entries_[i].scheme == scheme) {
                 if (scheme_end != std::string_view::npos) {
                     auto parsed = basic_uri<Config>::parse(uri_or_scheme);
-                    return entries_[i].factory(entries_[i].context, parsed.view());
+                    return entries_[i].factory(parsed.view());
                 } else {
                     uri_view uri;
                     uri.scheme = scheme;
                     uri.full_str = uri_or_scheme;
-                    return entries_[i].factory(entries_[i].context, uri);
+                    return entries_[i].factory(uri);
                 }
             }
         }
@@ -69,13 +86,12 @@ public:
 private:
     struct entry {
         fixed_string<Config::max_scheme_len> scheme{};
-        factory_fn factory = nullptr;
-        void* context = nullptr;
+        factory_fn factory;
     };
 
     template<typename Source>
-    static source_type factory_impl(void*, uri_view) {
-        return source_type(Source{});
+    static factory_fn make_factory() {
+        return [](uri_view) { return source_type(Source{}); };
     }
 
     std::array<entry, Config::max_schemes> entries_{};

@@ -239,3 +239,98 @@ TEST(UriTest, ConfigSelectsRfcParser) {
     static_assert(std::is_same_v<basic_uri<rfc_config>::parser_type, rfc3986_uri_parser>,
                   "rfc_config should use rfc3986_uri_parser");
 }
+
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic").scheme == "mqtt");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic").host == "broker");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic").port == "1883");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic").path == "/topic");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic?qos=1").query == "qos=1");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic#frag").fragment == "frag");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic?qos=1#frag").query == "qos=1");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883/topic?qos=1#frag").fragment == "frag");
+static_assert(minimal_uri_parser::parse("").empty());
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883").host == "broker");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883").port == "1883");
+static_assert(minimal_uri_parser::parse("mqtt://broker:1883").path.empty());
+static_assert(minimal_uri_parser::parse("/path?q=1#f").path == "/path");
+static_assert(minimal_uri_parser::parse("/path?q=1#f").query == "q=1");
+static_assert(minimal_uri_parser::parse("/path?q=1#f").fragment == "f");
+static_assert(minimal_uri_parser::parse("mqtt://user@h").userinfo() == "user");
+static_assert(uri_view{}.empty());
+static_assert(uri_view{}.userinfo().empty());
+
+static_assert(rfc3986_uri_parser::parse("mqtt://broker:1883/topic").scheme == "mqtt");
+static_assert(rfc3986_uri_parser::parse("mqtt://[::1]:1883/topic").host == "[::1]");
+static_assert(rfc3986_uri_parser::parse("mqtt://[::1]:1883/topic").port == "1883");
+static_assert(rfc3986_uri_parser::parse("mqtt://[::1]/topic").host == "[::1]");
+static_assert(rfc3986_uri_parser::parse("mqtt://[::1]/topic").port.empty());
+static_assert(rfc3986_uri_parser::parse("mqtt://user@h/topic").userinfo() == "user");
+
+template<auto Uri>
+constexpr bool nttp_scheme_is(std::string_view expected) {
+    return minimal_uri_parser::parse(static_cast<std::string_view>(Uri)).scheme == expected;
+}
+
+static_assert(nttp_scheme_is<fixed_string_literal("mqtt://broker:1883")>("mqtt"));
+static_assert(!nttp_scheme_is<fixed_string_literal("tcp://host")>("mqtt"));
+static_assert(fixed_string_literal("hello").size() == 5);
+static_assert(fixed_string_literal("") == std::string_view(""));
+
+TEST(UriTest, ConstexprMinimalScheme) {
+    constexpr auto v = minimal_uri_parser::parse("mqtt://broker:1883/topic");
+    EXPECT_EQ(v.scheme, "mqtt");
+    EXPECT_EQ(v.host, "broker");
+    EXPECT_EQ(v.port, "1883");
+    EXPECT_EQ(v.path, "/topic");
+}
+
+TEST(UriTest, ConstexprRfc3986Ipv6) {
+    constexpr auto v = rfc3986_uri_parser::parse("mqtt://[::1]:1883/topic");
+    EXPECT_EQ(v.host, "[::1]");
+    EXPECT_EQ(v.port, "1883");
+}
+
+TEST(UriTest, BasicUriParseEmptyDirect) {
+    auto u = basic_uri<default_config>::parse("");
+    EXPECT_FALSE(static_cast<bool>(u));
+    EXPECT_FALSE(u.truncated());
+}
+
+TEST(UriTest, BasicUriStorageAccessor) {
+    auto u = basic_uri<default_config>::parse("mqtt://broker/topic");
+    EXPECT_TRUE(static_cast<bool>(u));
+    EXPECT_EQ(u.storage(), "mqtt://broker/topic");
+}
+
+TEST(UriTest, Rfc3986ParseFragmentInAuthority) {
+    auto v = rfc3986_uri_parser::parse("mqtt://broker#frag");
+    EXPECT_EQ(v.scheme, "mqtt");
+    EXPECT_EQ(v.host, "broker");
+    EXPECT_EQ(v.fragment, "frag");
+}
+
+TEST(UriTest, Rfc3986ParseQueryInAuthority) {
+    auto v = rfc3986_uri_parser::parse("mqtt://broker?q=1");
+    EXPECT_EQ(v.scheme, "mqtt");
+    EXPECT_EQ(v.host, "broker");
+    EXPECT_EQ(v.query, "q=1");
+}
+
+TEST(UriTest, FixedStringLiteralBasic) {
+    constexpr auto lit = fixed_string_literal("mqtt://broker:1883");
+    EXPECT_EQ(lit.size(), 18u);
+    EXPECT_EQ(static_cast<std::string_view>(lit), "mqtt://broker:1883");
+}
+
+TEST(UriTest, FixedStringLiteralEmpty) {
+    constexpr auto lit = fixed_string_literal("");
+    EXPECT_TRUE(lit.empty());
+}
+
+TEST(UriTest, FixedStringLiteralNttpParse) {
+    auto v = minimal_uri_parser::parse(static_cast<std::string_view>(fixed_string_literal("tcp://host:80/path")));
+    EXPECT_EQ(v.scheme, "tcp");
+    EXPECT_EQ(v.host, "host");
+    EXPECT_EQ(v.port, "80");
+    EXPECT_EQ(v.path, "/path");
+}

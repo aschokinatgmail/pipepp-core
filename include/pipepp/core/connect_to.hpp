@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <utility>
 
 #include "pipeline.hpp"
@@ -36,6 +37,12 @@ struct connect_args {
     basic_pipeline<Source, Config>* target;
 };
 
+template<typename Source, typename Config>
+struct connect_args_with_prefix {
+    basic_pipeline<Source, Config>* target;
+    std::string prefix;
+};
+
 /**
  * Create a connection argument for piping into another pipeline.
  *
@@ -51,11 +58,31 @@ connect_args<Source, Config> connect_to(basic_pipeline<Source, Config>& target) 
 }
 
 template<typename Source, typename Config>
+connect_args_with_prefix<Source, Config> connect_to(basic_pipeline<Source, Config>& target,
+                                                       std::string prefix) {
+    return connect_args_with_prefix<Source, Config>{&target, std::move(prefix)};
+}
+
+template<typename Source, typename Config>
 basic_pipeline<Source, Config> operator|(basic_pipeline<Source, Config> pipe,
                                            connect_args<Source, Config>&& args) {
     auto* target = args.target;
     pipe.set_sink([target](const message_view& mv) {
         target->emit(mv);
+    });
+    return pipe;
+}
+
+template<typename Source, typename Config>
+basic_pipeline<Source, Config> operator|(basic_pipeline<Source, Config> pipe,
+                                           connect_args_with_prefix<Source, Config>&& args) {
+    auto* target = args.target;
+    std::string prefix = std::move(args.prefix);
+    pipe.set_sink([target, pfx = std::move(prefix)](const message_view& mv) mutable {
+        std::string remapped(pfx);
+        remapped.append(mv.topic);
+        message_view remapped_mv(remapped, mv.payload, mv.qos);
+        target->emit(remapped_mv);
     });
     return pipe;
 }

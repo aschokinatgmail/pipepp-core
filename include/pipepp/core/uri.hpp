@@ -221,9 +221,12 @@ private:
     static void rebind_view(basic_uri& u) {
         if (u.view_.full_str.empty()) return;
         auto base = std::string_view(u.storage_);
+        u.view_.full_str = base;
+
         auto rebind = [&](std::string_view sv) -> std::string_view {
             if (sv.empty()) return sv;
-            auto offset = static_cast<std::size_t>(sv.data() - u.view_.full_str.data());
+            auto offset = u.view_.full_str.find(sv);
+            if (offset == std::string_view::npos) return sv;
             return base.substr(offset, sv.size());
         };
         u.view_.scheme = rebind(u.view_.scheme);
@@ -233,7 +236,6 @@ private:
         u.view_.path = rebind(u.view_.path);
         u.view_.query = rebind(u.view_.query);
         u.view_.fragment = rebind(u.view_.fragment);
-        u.view_.full_str = base;
     }
 
     fixed_string<Config::max_uri_len> storage_{};

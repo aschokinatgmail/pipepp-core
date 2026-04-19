@@ -108,4 +108,29 @@ private:
 template<std::size_t N>
 fixed_string(const char (&)[N]) -> fixed_string<N - 1>;
 
+template<std::size_t N>
+struct fixed_string_literal {
+    char data_[N]{};
+
+    constexpr fixed_string_literal() = default;
+
+    constexpr fixed_string_literal(const char (&str)[N]) {
+        for (std::size_t i = 0; i < N; ++i)
+            data_[i] = str[i];
+    }
+
+    constexpr std::size_t size() const noexcept {
+        return N > 0 && data_[N - 1] == '\0' ? N - 1 : N;
+    }
+
+    constexpr bool empty() const noexcept { return size() == 0; }
+
+    constexpr operator std::string_view() const noexcept {
+        return std::string_view(data_, size());
+    }
+};
+
+template<std::size_t N>
+fixed_string_literal(const char (&)[N]) -> fixed_string_literal<N>;
+
 } // namespace pipepp::core

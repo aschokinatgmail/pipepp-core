@@ -18,6 +18,37 @@
 
 namespace pipepp::core {
 
+// ── Thread Safety Model ─────────────────────────────────────────────────
+//
+// basic_pipeline uses a spinlock-only concurrency model:
+//
+//   • `spinlock stage_lock_` — a non-recursive test-and-set spinlock.
+//     A `spinlock_guard` is acquired in `emit()`, which is the single
+//     entry point that delegates to `process_message()`.  Every mutation
+//     of pipeline stage state (stages_, sink_) therefore happens under
+//     the lock.
+//
+//   • `std::atomic<bool> running_` — checked by the event loop
+//     (`memory_order_acquire`) and set by `stop()` (`memory_order_release`).
+//     No additional synchronisation is needed for the flag itself.
+//
+//   • `emit()` is fully synchronous — it blocks the caller until every
+//     stage and the sink have completed.  There is no SPSC queue, no
+//     lock-free queue, and no `flush()` primitive.  Callers may invoke
+//     `emit()` from any thread at any time; the spinlock serialises
+//     concurrent calls.
+//
+//   • The event loop (`run()`) installs a message callback that routes
+//     through `emit()`, so the same spinlock protects both
+//     externally-initiated and source-initiated message processing.
+//
+// Guarantees:
+//   – No data race on stages, sink, or message mutation under TSAN.
+//   – `stop()` is safe to call from any thread.
+//   – `emit()` is safe to call from any thread, including while `run()`
+//     is executing its event loop.
+// ─────────────────────────────────────────────────────────────────────────
+
 template<typename Source, typename Config = default_config>
     requires BusSource<std::remove_reference_t<Source>, Config>
 class basic_pipeline {
