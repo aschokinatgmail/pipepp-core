@@ -12,8 +12,8 @@ TEST(FaultTest, ConnectFailureReturnsError) {
     FaultSource fs;
     fs.fail_connect = true;
     basic_pipeline<FaultSource> pipe(std::move(fs));
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-       .set_sink([](const message_view&) {});
+    pipe.add_stage(TrueStage{})
+       .set_sink(NoopSink{});
     pipe.subscribe("topic", 1);
     auto r = pipe.run();
     EXPECT_FALSE(r);
@@ -24,8 +24,8 @@ TEST(FaultTest, SubscribeFailureReturnsErrorAndDisconnects) {
     FaultSource fs;
     fs.fail_subscribe = true;
     basic_pipeline<FaultSource> pipe(std::move(fs));
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-       .set_sink([](const message_view&) {});
+    pipe.add_stage(TrueStage{})
+       .set_sink(NoopSink{});
     pipe.subscribe("topic", 0);
     auto r = pipe.run();
     EXPECT_FALSE(r);
@@ -38,7 +38,7 @@ TEST(FaultTest, DisconnectFailureReported) {
     fs.fail_disconnect = true;
     fs.max_polls = 1;
     basic_pipeline<FaultSource> pipe(std::move(fs));
-    pipe.set_sink([](const message_view&) {});
+    pipe.set_sink(NoopSink{});
     pipe.subscribe("t", 0);
     auto r = pipe.run();
     EXPECT_TRUE(r);
@@ -51,7 +51,7 @@ TEST(FaultTest, RunHappyPathWithSubscriptions) {
     basic_pipeline<FaultSource> pipe(std::move(fs));
     pipe.subscribe("sensors/#", 1)
        .subscribe("status", 0)
-       .add_stage([](basic_message<default_config>&) { return true; })
+       .add_stage(TrueStage{})
        .set_sink([&](const message_view&) { sink_count.fetch_add(1); });
     auto r = pipe.run();
     EXPECT_TRUE(r);
@@ -69,7 +69,7 @@ TEST(FaultTest, ConfigOpAppliedDuringRun) {
         ++config_applied;
         return result{};
     });
-    pipe.set_sink([](const message_view&) {});
+    pipe.set_sink(NoopSink{});
     pipe.subscribe("t", 0);
     auto r = pipe.run();
     EXPECT_TRUE(r);
@@ -83,7 +83,7 @@ TEST(FaultTest, ConfigOpFailureCancelsRun) {
     pipe.configure([](FaultSource&) {
         return result{unexpect, make_unexpected(error_code::invalid_argument)};
     });
-    pipe.set_sink([](const message_view&) {});
+    pipe.set_sink(NoopSink{});
     pipe.subscribe("t", 0);
     auto r = pipe.run();
     EXPECT_FALSE(r);
@@ -95,7 +95,7 @@ TEST(FaultTest, PollOnceRunningAndNotRunning) {
     sss.max_polls = 50;
     basic_pipeline<SelfStoppingSource> pipe(std::move(sss));
     EXPECT_FALSE(pipe.poll_once());
-    pipe.set_sink([](const message_view&) {});
+    pipe.set_sink(NoopSink{});
     pipe.subscribe("t", 0);
     std::thread runner([&]() { pipe.run(); });
     for (int i = 0; i < 200 && !pipe.is_running(); ++i) std::this_thread::yield();
@@ -108,7 +108,7 @@ TEST(FaultTest, PollOnceRunningAndNotRunning) {
 TEST(FaultTest, EmitOversizedTopicDrops) {
     basic_pipeline<MockSource> pipe(MockSource{});
     int sink_count = 0;
-    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    pipe.set_sink(CountingSink{&sink_count});
     std::string long_topic(default_config::max_topic_len + 10, 'x');
     std::byte data[] = {std::byte{0x01}};
     message_view mv(long_topic, data, 0);
@@ -119,7 +119,7 @@ TEST(FaultTest, EmitOversizedTopicDrops) {
 TEST(FaultTest, EmitOversizedPayloadDrops) {
     basic_pipeline<MockSource> pipe(MockSource{});
     int sink_count = 0;
-    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    pipe.set_sink(CountingSink{&sink_count});
     std::vector<std::byte> big_payload(default_config::max_payload_len + 10, std::byte{0xFF});
     message_view mv("topic", big_payload, 0);
     pipe.emit(mv);
@@ -137,7 +137,7 @@ TEST(FaultTest, StageFilterDropsMessage) {
     basic_pipeline<MockSource> pipe(MockSource{});
     int sink_count = 0;
     pipe.add_stage([](basic_message<default_config>&) { return false; })
-       .set_sink([&](const message_view&) { ++sink_count; });
+       .set_sink(CountingSink{&sink_count});
     std::byte data[] = {std::byte{0x01}};
     message_view mv("topic", data, 0);
     pipe.emit(mv);
@@ -184,7 +184,7 @@ TEST(FaultTest, SubscribeOverflow) {
 TEST(FaultTest, ConfigureOverflow) {
     basic_pipeline<MockSource> pipe(MockSource{});
     for (std::size_t i = 0; i <= default_config::max_config_ops; ++i) {
-        pipe.configure([](MockSource&) { return result{}; });
+        pipe.configure(NoopConfigure{});
     }
     EXPECT_FALSE(pipe.check());
 }
@@ -192,7 +192,7 @@ TEST(FaultTest, ConfigureOverflow) {
 TEST(FaultTest, AddStageOverflow) {
     basic_pipeline<MockSource> pipe(MockSource{});
     for (std::size_t i = 0; i <= default_config::max_stages; ++i) {
-        pipe.add_stage([](basic_message<default_config>&) { return true; });
+        pipe.add_stage(TrueStage{});
     }
     EXPECT_FALSE(pipe.check());
 }
@@ -216,7 +216,7 @@ TEST(FaultTest, EventLoopCallbackInvokesEmit) {
     cps.max_polls = 3;
     std::atomic<int> sink_count{0};
     basic_pipeline<CallbackPollSource> pipe(std::move(cps));
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view& mv) {
            EXPECT_EQ(mv.topic, "cb/topic");
            sink_count.fetch_add(1);
@@ -235,7 +235,7 @@ TEST(FaultTest, ConnectToForwardingWithFaultSource) {
 
     int pipe2_sink_count = 0;
     basic_pipeline<FaultSource> pipe2(std::move(fs2));
-    pipe2.set_sink([&](const message_view&) { ++pipe2_sink_count; });
+    pipe2.set_sink(CountingSink{&pipe2_sink_count});
 
     basic_pipeline<FaultSource> pipe1(std::move(fs1));
     pipe1.set_sink([&](const message_view& mv) { pipe2.emit(mv); });
@@ -275,8 +275,8 @@ TEST(FaultTest, RunWithNoSubscriptions) {
     cps.max_polls = 1;
     int sink_count = 0;
     basic_pipeline<CallbackPollSource> pipe(std::move(cps));
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-       .set_sink([&](const message_view&) { ++sink_count; });
+    pipe.add_stage(TrueStage{})
+       .set_sink(CountingSink{&sink_count});
     auto r = pipe.run();
     EXPECT_TRUE(r);
     EXPECT_EQ(sink_count, 1);
@@ -302,7 +302,7 @@ TEST(FaultTest, EmitFromMultipleThreadsWithFault) {
     fs.max_polls = 0;
     std::atomic<int> sink_count{0};
     basic_pipeline<FaultSource> pipe(std::move(fs));
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view&) { sink_count.fetch_add(1, std::memory_order_relaxed); });
 
     std::byte data[] = {std::byte{0x01}};

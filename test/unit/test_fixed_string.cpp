@@ -113,3 +113,21 @@ TEST(FixedStringTest, SubscriptAccess) {
     EXPECT_EQ(fs[0], 'h');
     EXPECT_EQ(fs[4], 'o');
 }
+
+TEST(FixedStringLiteralTest, NonNullTerminated) {
+    fixed_string_literal<3> fsl;
+    fsl.data_[0] = 'a';
+    fsl.data_[1] = 'b';
+    fsl.data_[2] = 'c';
+    EXPECT_EQ(fsl.size(), 3u);
+    EXPECT_FALSE(fsl.empty());
+}
+
+TEST(FixedStringLiteralTest, NullTerminated) {
+    fixed_string_literal<4> fsl;
+    fsl.data_[0] = 'a';
+    fsl.data_[1] = 'b';
+    fsl.data_[2] = '\0';
+    fsl.data_[3] = '\0';
+    EXPECT_EQ(fsl.size(), 3u);
+}

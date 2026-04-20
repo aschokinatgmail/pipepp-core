@@ -27,6 +27,7 @@ add_executable(pipepp-unit-tests
     unit/test_capacity.cpp
     unit/test_pipeline_coverage.cpp
     unit/test_fault_injection.cpp
+    unit/test_function_coverage.cpp
 )
 target_link_libraries(pipepp-unit-tests PRIVATE pipepp-core GTest::gtest_main)
 target_include_directories(pipepp-unit-tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

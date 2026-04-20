@@ -42,7 +42,7 @@ TEST(AnySourceTest, PublishViaTypeErasure) {
 
 TEST(AnySourceTest, SetCallbackAndPoll) {
     any_source<default_config> src(MockSource{});
-    auto cb = message_callback<default_config>([](const message_view&) {});
+    auto cb = message_callback<default_config>(NoopCallback{});
     src.set_message_callback(std::move(cb));
     src.poll();
 }
@@ -148,7 +148,7 @@ TEST(AnySourceTest, FullSourcePublishIncrements) {
 
 TEST(AnySourceTest, FullSourceSetCallbackAndPoll) {
     any_source<default_config> src(FullSource{});
-    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.set_message_callback(message_callback<default_config>(NoopCallback{}));
     src.poll();
 }
 
@@ -159,7 +159,7 @@ TEST(AnySourceTest, CountingSourceAllMethods) {
     EXPECT_TRUE(src.subscribe("a/b", 0).has_value());
     std::byte data[] = {std::byte{0xFF}};
     EXPECT_TRUE(src.publish("c/d", data, 1).has_value());
-    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.set_message_callback(message_callback<default_config>(NoopCallback{}));
     src.poll();
     EXPECT_TRUE(src.disconnect().has_value());
     EXPECT_FALSE(src.is_connected());
@@ -221,7 +221,7 @@ TEST(AnySourceTest, ResetThenAllMethodsReturnDefaults) {
     EXPECT_TRUE(src.subscribe("t", 0).has_value());
     std::byte d[] = {std::byte{0x00}};
     EXPECT_TRUE(src.publish("t", d, 0).has_value());
-    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.set_message_callback(message_callback<default_config>(NoopCallback{}));
     src.poll();
 }
 
@@ -235,7 +235,7 @@ TEST(AnySourceTest, NullSourceAllMethodDefaults) {
     EXPECT_TRUE(src.subscribe("t", 0).has_value());
     std::byte d[] = {std::byte{0x00}};
     EXPECT_TRUE(src.publish("t", d, 0).has_value());
-    src.set_message_callback(message_callback<default_config>([](const message_view&) {}));
+    src.set_message_callback(message_callback<default_config>(NoopCallback{}));
     src.poll();
     src.reset();
 }

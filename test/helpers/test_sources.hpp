@@ -154,3 +154,38 @@ struct CallbackPollSource {
         if (poll_count >= max_polls) connected = false;
     }
 };
+
+struct TrueStage {
+    template<typename Config>
+    bool operator()(basic_message<Config>&) const { return true; }
+};
+
+struct NoopSink {
+    void operator()(const message_view&) const {}
+};
+
+struct CountingSink {
+    int* count;
+    explicit CountingSink(int* c) : count(c) {}
+    void operator()(const message_view&) const { ++*count; }
+};
+
+struct NoopCallback {
+    void operator()(const message_view&) const {}
+};
+
+struct CountingCallback {
+    int* count;
+    explicit CountingCallback(int* c) : count(c) {}
+    void operator()(const message_view&) const { ++*count; }
+};
+
+struct TrueFilter {
+    template<typename Config>
+    bool operator()(basic_message<Config>&) const { return true; }
+};
+
+struct NoopConfigure {
+    template<typename S>
+    result operator()(S&) const { return {}; }
+};

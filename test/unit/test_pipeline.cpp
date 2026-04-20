@@ -14,8 +14,8 @@ TEST(PipelineTest, BasicConstruction) {
 
 TEST(PipelineTest, MethodChaining) {
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-        .set_sink([](const message_view&) {});
+    pipe.add_stage(TrueStage{})
+        .set_sink(NoopSink{});
 }
 
 TEST(PipelineTest, SubscribeMethod) {
@@ -31,41 +31,41 @@ TEST(PipelineTest, ConfigureMethod) {
 
 TEST(PipelineTest, PipeSyntaxTransform) {
     auto pipe = basic_pipeline<MockSource>(MockSource{})
-        | transform([](basic_message<default_config>& msg) { return true; })
-        | sink([](const message_view&) {});
+        | transform(TrueStage{})
+        | sink(NoopSink{});
 }
 
 TEST(PipelineTest, PipeSyntaxFilter) {
     auto pipe = basic_pipeline<MockSource>(MockSource{})
-        | filter([](basic_message<default_config>& msg) { return true; })
-        | sink([](const message_view&) {});
+        | filter(TrueFilter{})
+        | sink(NoopSink{});
 }
 
 TEST(PipelineTest, PipeSyntaxSubscribe) {
     auto pipe = basic_pipeline<MockSource>(MockSource{})
         | subscribe("test/topic", 0)
-        | sink([](const message_view&) {});
+        | sink(NoopSink{});
 }
 
 TEST(PipelineTest, PipeSyntaxConfigure) {
     auto pipe = basic_pipeline<MockSource>(MockSource{})
-        | configure([](auto&) -> result { return {}; })
-        | sink([](const message_view&) {});
+        | configure(NoopConfigure{})
+        | sink(NoopSink{});
 }
 
 TEST(PipelineTest, PipeSyntaxChaining) {
     auto pipe = basic_pipeline<MockSource>(MockSource{})
         | subscribe("sensors/#", 0)
-        | transform([](basic_message<default_config>& m) { return true; })
-        | filter([](basic_message<default_config>& m) { return true; })
-        | sink([](const message_view&) {});
+        | transform(TrueStage{})
+        | filter(TrueFilter{})
+        | sink(NoopSink{});
 }
 
 TEST(PipelineTest, EmitMessage) {
     bool sink_called = false;
     std::string received_topic;
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view& mv) {
             sink_called = true;
             received_topic = std::string(mv.topic);
@@ -80,22 +80,22 @@ TEST(PipelineTest, EmitMessage) {
 }
 
 TEST(PipelineTest, FilterDropsMessage) {
-    bool sink_called = false;
+    int sink_count = 0;
     basic_pipeline<MockSource> pipe(MockSource{});
     pipe.add_stage([](basic_message<default_config>& m) { return false; })
-        .set_sink([&](const message_view&) { sink_called = true; });
+        .set_sink(CountingSink{&sink_count});
 
     std::byte data[] = {std::byte{0x01}};
     message_view mv("filtered", data, 0);
     pipe.emit(mv);
 
-    EXPECT_FALSE(sink_called);
+    EXPECT_EQ(sink_count, 0);
 }
 
 TEST(PipelineTest, CapacityOverflowDetectedByRun) {
     basic_pipeline<MockSource> pipe(MockSource{});
     for (int i = 0; i < static_cast<int>(default_config::max_stages) + 1; ++i) {
-        pipe.add_stage([](basic_message<default_config>&) { return true; });
+        pipe.add_stage(TrueStage{});
     }
     auto check_result = pipe.check();
     EXPECT_FALSE(check_result.has_value());
@@ -104,7 +104,7 @@ TEST(PipelineTest, CapacityOverflowDetectedByRun) {
 
 TEST(PipelineTest, NoErrorWithinCapacity) {
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>&) { return true; });
+    pipe.add_stage(TrueStage{});
     auto check_result = pipe.check();
     EXPECT_TRUE(check_result.has_value());
 }

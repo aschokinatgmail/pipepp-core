@@ -11,7 +11,7 @@ TEST(SystemTest, FullPipelineEmitAndSink) {
     bool sink_called = false;
 
     basic_pipeline<FullSource> pipe(FullSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view& mv) {
             sink_called = true;
             sinked_topic = std::string(mv.topic);
@@ -35,7 +35,7 @@ TEST(SystemTest, PipelineDropsFilteredMessages) {
             if (m.qos() > 0) { ++pass_count; return true; }
             return false;
         })
-        .set_sink([](const message_view&) {});
+        .set_sink(NoopSink{});
 
     std::byte data[] = {std::byte{0x01}};
     pipe.emit(message_view("topic1", data, 1));
@@ -49,18 +49,18 @@ TEST(SystemTest, PipelineDropsFilteredMessages) {
 TEST(SystemTest, EmbeddedConfigPipeline) {
     auto pipe = basic_pipeline<FullSource, embedded_config>(FullSource{})
         | subscribe("emb/#", 0)
-        | filter([](basic_message<embedded_config>&) { return true; })
-        | sink([](const message_view&) {});
+        | filter(TrueFilter{})
+        | sink(NoopSink{});
 }
 
 TEST(SystemTest, EmbeddedConfigEmitWithSpinlock) {
-    bool sink_called = false;
+    int sink_count = 0;
     basic_pipeline<FullSource, embedded_config> pipe(FullSource{});
-    pipe.add_stage([](basic_message<embedded_config>& m) { return true; })
-       .set_sink([&](const message_view&) { sink_called = true; });
+    pipe.add_stage(TrueStage{})
+       .set_sink(CountingSink{&sink_count});
 
     std::byte data[] = {std::byte{0x01}};
     pipe.emit(message_view("emb/test", data, 1));
 
-    EXPECT_TRUE(sink_called);
+    EXPECT_GT(sink_count, 0);
 }

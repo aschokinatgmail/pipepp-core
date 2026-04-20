@@ -8,8 +8,10 @@ RUN apt-get update && apt-get install -y \
     make \
     libgtest-dev \
     google-mock \
-    gcovr \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --break-system-packages gcovr>=8.0
 
 # Build GTest from source with coverage flags
 WORKDIR /tmp/gtest-build

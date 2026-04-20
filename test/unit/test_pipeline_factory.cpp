@@ -78,3 +78,26 @@ TEST(PipelineFactoryTest, EmbeddedConfigSize) {
     auto default_sz = pipeline_size<MockSource, default_config>();
     EXPECT_LT(sz, default_sz);
 }
+
+TEST(PipelineFactoryTest, MisalignedBufferReturnsNull) {
+    std::byte buffer[pipeline_allocator<MockSource>::required_size + alignof(std::max_align_t)];
+    auto* misaligned = buffer + 1;
+    auto* pipe = pipeline_allocator<MockSource>::create(misaligned, pipeline_allocator<MockSource>::required_size, MockSource{});
+    EXPECT_EQ(pipe, nullptr);
+}
+
+TEST(PipelineFactoryTest, CreateUriNullBufferReturnsNull) {
+    auto* pipe = pipeline_allocator<MockSource>::create_uri(nullptr, 1024, MockSource{}, "mqtt://x/y");
+    EXPECT_EQ(pipe, nullptr);
+}
+
+TEST(PipelineFactoryTest, CreateUriMisalignedBufferReturnsNull) {
+    std::byte buffer[pipeline_allocator<MockSource>::required_size + alignof(std::max_align_t)];
+    auto* misaligned = buffer + 1;
+    auto* pipe = pipeline_allocator<MockSource>::create_uri(misaligned, pipeline_allocator<MockSource>::required_size, MockSource{}, "mqtt://x/y");
+    EXPECT_EQ(pipe, nullptr);
+}
+
+TEST(PipelineFactoryTest, DestroyNullIsSafe) {
+    pipeline_allocator<MockSource>::destroy(nullptr);
+}

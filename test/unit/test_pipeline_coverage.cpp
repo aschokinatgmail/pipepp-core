@@ -1,60 +1,12 @@
 #include <gtest/gtest.h>
 #include <pipepp/core/pipeline.hpp>
+#include <pipepp/core/adapt.hpp>
 #include "../helpers/test_sources.hpp"
 
 #include <thread>
 #include <vector>
 
 using namespace pipepp::core;
-
-namespace {
-
-struct FailingConnectSource {
-    bool connected = false;
-    int disconnect_count = 0;
-    message_callback<default_config> callback;
-
-    result connect(uri_view = {}) {
-        return result{unexpect, make_unexpected(error_code::connection_failed)};
-    }
-    result disconnect() { ++disconnect_count; connected = false; return {}; }
-    bool is_connected() const { return connected; }
-    result subscribe(std::string_view, int) { return {}; }
-    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
-    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
-    void poll() {}
-};
-
-struct FailingSubscribeSource {
-    bool connected = false;
-    int disconnect_count = 0;
-    message_callback<default_config> callback;
-
-    result connect(uri_view = {}) { connected = true; return {}; }
-    result disconnect() { ++disconnect_count; connected = false; return {}; }
-    bool is_connected() const { return connected; }
-    result subscribe(std::string_view, int) {
-        return result{unexpect, make_unexpected(error_code::invalid_argument)};
-    }
-    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
-    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
-    void poll() {}
-};
-
-struct IdleSource {
-    bool connected = false;
-    message_callback<default_config> callback;
-
-    result connect(uri_view = {}) { connected = true; return {}; }
-    result disconnect() { connected = false; return {}; }
-    bool is_connected() const { return connected; }
-    result subscribe(std::string_view, int) { return {}; }
-    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
-    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
-    void poll() {}
-};
-
-} // namespace
 
 TEST(PipelineCoverageTest, ConstructorTruncatedUriDefaultConfig) {
     std::string long_uri(300, 'a');
@@ -88,7 +40,7 @@ TEST(PipelineCoverageTest, SubscribeCapacityOverflow) {
 TEST(PipelineCoverageTest, ConfigureCapacityOverflow) {
     basic_pipeline<MockSource> pipe(MockSource{});
     for (std::size_t i = 0; i < default_config::max_config_ops + 1; ++i) {
-        pipe.configure([](auto&) -> result { return {}; });
+        pipe.configure(NoopConfigure{});
     }
     auto r = pipe.check();
     EXPECT_FALSE(r.has_value());
@@ -98,7 +50,7 @@ TEST(PipelineCoverageTest, ConfigureCapacityOverflow) {
 TEST(PipelineCoverageTest, AddStageCapacityOverflow) {
     basic_pipeline<MockSource> pipe(MockSource{});
     for (std::size_t i = 0; i < default_config::max_stages + 1; ++i) {
-        pipe.add_stage([](basic_message<default_config>&) { return true; });
+        pipe.add_stage(TrueStage{});
     }
     auto r = pipe.check();
     EXPECT_FALSE(r.has_value());
@@ -113,8 +65,8 @@ TEST(PipelineCoverageTest, RunFullHappyPath) {
     pipe.source().max_polls = 2;
     pipe.configure([&](auto&) -> result { ++config_applied; return {}; })
         .subscribe("test/topic", 1)
-        .add_stage([](basic_message<default_config>&) { return true; })
-        .set_sink([&](const message_view&) { ++sink_count; });
+        .add_stage(TrueStage{})
+        .set_sink(CountingSink{&sink_count});
 
     auto r = pipe.run();
     EXPECT_TRUE(r.has_value());
@@ -132,7 +84,9 @@ TEST(PipelineCoverageTest, RunPendingErrorFromTruncatedUri) {
 }
 
 TEST(PipelineCoverageTest, RunConnectFailure) {
-    basic_pipeline<FailingConnectSource> pipe(FailingConnectSource{});
+    FaultSource src;
+    src.fail_connect = true;
+    basic_pipeline<FaultSource> pipe(std::move(src));
     pipe.subscribe("test/topic", 0);
     auto r = pipe.run();
     EXPECT_FALSE(r.has_value());
@@ -152,7 +106,9 @@ TEST(PipelineCoverageTest, RunConfigOpFailure) {
 }
 
 TEST(PipelineCoverageTest, RunSubscribeFailure) {
-    basic_pipeline<FailingSubscribeSource> pipe(FailingSubscribeSource{});
+    FaultSource src;
+    src.fail_subscribe = true;
+    basic_pipeline<FaultSource> pipe(std::move(src));
     pipe.subscribe("test/topic", 0);
     auto r = pipe.run();
     EXPECT_FALSE(r.has_value());
@@ -161,7 +117,7 @@ TEST(PipelineCoverageTest, RunSubscribeFailure) {
 }
 
 TEST(PipelineCoverageTest, PollOnceWhileRunning) {
-    basic_pipeline<IdleSource> pipe(IdleSource{});
+    basic_pipeline<MockSource> pipe(MockSource{});
 
     std::thread runner([&]() { pipe.run(); });
 
@@ -176,33 +132,33 @@ TEST(PipelineCoverageTest, PollOnceWhileRunning) {
 }
 
 TEST(PipelineCoverageTest, EmitOversizedPayload) {
-    bool sink_called = false;
+    int sink_count = 0;
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-       .set_sink([&](const message_view&) { sink_called = true; });
+    pipe.add_stage(TrueStage{})
+       .set_sink(CountingSink{&sink_count});
 
     std::vector<std::byte> large_payload(default_config::max_payload_len + 1, std::byte{0xAA});
     message_view mv("topic", large_payload, 0);
     pipe.emit(mv);
-    EXPECT_FALSE(sink_called);
+    EXPECT_EQ(sink_count, 0);
 }
 
 TEST(PipelineCoverageTest, EmitOversizedTopic) {
-    bool sink_called = false;
+    int sink_count = 0;
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-       .set_sink([&](const message_view&) { sink_called = true; });
+    pipe.add_stage(TrueStage{})
+       .set_sink(CountingSink{&sink_count});
 
     std::string long_topic(300, 'x');
     std::byte data[] = {std::byte{0x01}};
     message_view mv(long_topic, data, 0);
     pipe.emit(mv);
-    EXPECT_FALSE(sink_called);
+    EXPECT_EQ(sink_count, 0);
 }
 
 TEST(PipelineCoverageTest, EmitWithoutSinkNoCrash) {
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>&) { return true; });
+    pipe.add_stage(TrueStage{});
 
     std::byte data[] = {std::byte{0x01}};
     message_view mv("topic", data, 0);
@@ -212,7 +168,7 @@ TEST(PipelineCoverageTest, EmitWithoutSinkNoCrash) {
 TEST(PipelineCoverageTest, CheckReturnsOk) {
     basic_pipeline<MockSource> pipe(MockSource{});
     pipe.subscribe("ok/topic", 0)
-       .add_stage([](basic_message<default_config>&) { return true; });
+       .add_stage(TrueStage{});
     auto r = pipe.check();
     EXPECT_TRUE(r.has_value());
 }
@@ -236,7 +192,7 @@ TEST(PipelineCoverageTest, ConnectUriTruncated) {
 TEST(PipelineCoverageTest, MoveAssignment) {
     basic_pipeline<MockSource> pipe1(MockSource{});
     pipe1.subscribe("topic/a", 1)
-        .add_stage([](basic_message<default_config>&) { return true; });
+        .add_stage(TrueStage{});
 
     basic_pipeline<MockSource> pipe2(MockSource{});
     pipe2 = std::move(pipe1);
@@ -250,11 +206,21 @@ TEST(PipelineCoverageTest, EventLoopCallbackAndPoll) {
     int sink_count = 0;
     basic_pipeline<SelfStoppingSource> pipe(SelfStoppingSource{});
     pipe.source().max_polls = 3;
-    pipe.add_stage([](basic_message<default_config>&) { return true; })
-       .set_sink([&](const message_view&) { ++sink_count; });
+    pipe.add_stage(TrueStage{})
+       .set_sink(CountingSink{&sink_count});
 
     auto r = pipe.run();
     EXPECT_TRUE(r.has_value());
     EXPECT_GE(sink_count, 1);
     EXPECT_FALSE(pipe.is_running());
+}
+
+TEST(PipelineCoverageTest, RangeSourcePollWithoutCallback) {
+    std::byte data[] = {std::byte{0x01}};
+    message_view mv("test/topic", data, 0);
+    std::array<message_view, 1> arr{mv};
+    auto src = adapt(arr);
+    src.connect();
+    src.poll();
+    EXPECT_FALSE(src.is_connected());
 }

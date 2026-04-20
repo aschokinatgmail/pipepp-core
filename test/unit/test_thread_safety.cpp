@@ -7,21 +7,6 @@
 
 using namespace pipepp::core;
 
-namespace {
-struct YieldPollSource {
-    bool connected = false;
-    message_callback<default_config> callback;
-
-    result connect(uri_view = {}) { connected = true; return {}; }
-    result disconnect() { connected = false; return {}; }
-    bool is_connected() const { return connected; }
-    result subscribe(std::string_view, int) { return {}; }
-    result publish(std::string_view, std::span<const std::byte>, int) { return {}; }
-    void set_message_callback(message_callback<default_config> cb) { callback = std::move(cb); }
-    void poll() { std::this_thread::yield(); }
-};
-}
-
 TEST(ThreadSafetyTest, AtomicStop) {
     basic_pipeline<MockSource> pipe(MockSource{});
     EXPECT_FALSE(pipe.is_running());
@@ -32,7 +17,7 @@ TEST(ThreadSafetyTest, AtomicStop) {
 TEST(ThreadSafetyTest, ConcurrentEmitStop) {
     bool sink_called = false;
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view&) { sink_called = true; });
 
     std::byte data[] = {std::byte{0x01}};
@@ -55,7 +40,7 @@ TEST(ThreadSafetyTest, ConcurrentEmitStop) {
 TEST(ThreadSafetyTest, EmitFromMultipleThreads) {
     std::atomic<int> count{0};
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view&) { count.fetch_add(1, std::memory_order_relaxed); });
 
     std::byte data[] = {std::byte{0x01}};
@@ -78,7 +63,7 @@ TEST(ThreadSafetyTest, PipelineWithUriView) {
 TEST(ThreadSafetyTest, CallbackDispatchAcrossThreads) {
     std::atomic<int> count{0};
     basic_pipeline<FullSource> pipe(FullSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view&) { count.fetch_add(1, std::memory_order_relaxed); });
 
     std::byte data[] = {std::byte{0x01}};
@@ -110,8 +95,8 @@ TEST(ThreadSafetyTest, CallbackDispatchAcrossThreads) {
 
 TEST(ThreadSafetyTest, EmitWhileRunInEventLoop) {
     std::atomic<int> count{0};
-    basic_pipeline<YieldPollSource> pipe(YieldPollSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    basic_pipeline<MockSource> pipe(MockSource{});
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view&) { count.fetch_add(1, std::memory_order_relaxed); });
 
     std::byte data[] = {std::byte{0x01}};
@@ -138,7 +123,7 @@ TEST(ThreadSafetyTest, EmitWhileRunInEventLoop) {
 TEST(ThreadSafetyTest, StressManyThreadsEmit) {
     std::atomic<int> count{0};
     basic_pipeline<MockSource> pipe(MockSource{});
-    pipe.add_stage([](basic_message<default_config>& m) { return true; })
+    pipe.add_stage(TrueStage{})
        .set_sink([&](const message_view&) { count.fetch_add(1, std::memory_order_relaxed); });
 
     std::byte data[] = {std::byte{0x01}};

@@ -22,9 +22,9 @@ TEST(IntegrationTest, PipelineSubscribeRecordsTopic) {
 TEST(IntegrationTest, PipeSyntaxFullChain) {
     auto pipe = basic_pipeline<CountingSource>(CountingSource{})
         | subscribe("input/#", 0)
-        | transform([](basic_message<default_config>& m) { return true; })
-        | filter([](basic_message<default_config>& m) { return true; })
-        | sink([](const message_view&) {});
+        | transform(TrueStage{})
+        | filter(TrueFilter{})
+        | sink(NoopSink{});
 }
 
 TEST(IntegrationTest, PipeSyntaxWithConfigure) {
@@ -32,14 +32,14 @@ TEST(IntegrationTest, PipeSyntaxWithConfigure) {
     auto pipe = basic_pipeline<CountingSource>(CountingSource{})
         | configure([&](auto&) -> result { config_called = true; return {}; })
         | subscribe("data/#", 0)
-        | sink([](const message_view&) {});
+        | sink(NoopSink{});
 }
 
 TEST(IntegrationTest, PipelineEmitAndSinkReceives) {
     std::string received;
     auto pipe = basic_pipeline<CountingSource>(CountingSource{})
-        | transform([](basic_message<default_config>& m) { return true; })
-        | filter([](basic_message<default_config>& m) { return true; })
+        | transform(TrueStage{})
+        | filter(TrueFilter{})
         | sink([&](const message_view& mv) { received = std::string(mv.topic); });
     
     std::byte data[] = {std::byte{0x01}};
@@ -49,15 +49,15 @@ TEST(IntegrationTest, PipelineEmitAndSinkReceives) {
 }
 
 TEST(IntegrationTest, PipelineFilterBlocksMessage) {
-    bool sink_called = false;
+    int sink_count = 0;
     auto pipe = basic_pipeline<CountingSource>(CountingSource{})
         | filter([](basic_message<default_config>&) { return false; })
-        | sink([&](const message_view&) { sink_called = true; });
+        | sink(CountingSink{&sink_count});
     
     std::byte data[] = {std::byte{0x01}};
     message_view mv("blocked/topic", data, 0);
     pipe.emit(mv);
-    EXPECT_FALSE(sink_called);
+    EXPECT_EQ(sink_count, 0);
 }
 
 TEST(IntegrationTest, PipelineMultiStageTransform) {

@@ -106,3 +106,16 @@ TEST(ExpectedTest, CopyGenericExpectedWithError) {
     EXPECT_FALSE(e2.has_value());
     EXPECT_EQ(e2.error(), error_code::out_of_range);
 }
+
+TEST(ExpectedTest, CopyGenericExpectedWithValue) {
+    expected<int, error_code> e1{42};
+    expected<int, error_code> e2 = e1;
+    EXPECT_TRUE(e2.has_value());
+    EXPECT_EQ(*e2, 42);
+}
+
+TEST(ExpectedTest, ValueOrMoveOnError) {
+    expected<int, error_code> e{unexpect, make_unexpected(error_code::timeout)};
+    auto val = std::move(e).value_or(99);
+    EXPECT_EQ(val, 99);
+}

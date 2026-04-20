@@ -35,7 +35,7 @@ TEST(RunEmitTest, RunReturnsOk) {
     basic_pipeline<PollingSource> pipe(PollingSource{});
     pipe.source().max_polls = 3;
     int sink_count = 0;
-    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    pipe.set_sink(CountingSink{&sink_count});
 
     std::thread runner([&]() { pipe.run(); });
 
@@ -52,7 +52,7 @@ TEST(RunEmitTest, RunResetsRunningOnExit) {
     basic_pipeline<SelfStoppingSource> pipe(SelfStoppingSource{});
     pipe.source().max_polls = 1;
     int sink_count = 0;
-    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    pipe.set_sink(CountingSink{&sink_count});
 
     auto r = pipe.run();
     EXPECT_TRUE(r.has_value());
@@ -63,7 +63,7 @@ TEST(RunEmitTest, RunResetsRunningOnExit) {
 TEST(RunEmitTest, RunReturnsCapacityError) {
     basic_pipeline<PollingSource> pipe(PollingSource{});
     for (int i = 0; i < static_cast<int>(default_config::max_stages) + 1; ++i) {
-        pipe.add_stage([](basic_message<default_config>&) { return true; });
+        pipe.add_stage(TrueStage{});
     }
     auto r = pipe.run();
     EXPECT_FALSE(r.has_value());
@@ -89,7 +89,7 @@ TEST(RunEmitTest, EmitWithMultipleStages) {
 
     pipe.add_stage([&](basic_message<default_config>&) { ++stage1_count; return true; });
     pipe.add_stage([&](basic_message<default_config>&) { ++stage2_count; return true; });
-    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    pipe.set_sink(CountingSink{&sink_count});
 
     std::byte data[] = {std::byte{0x01}};
     message_view mv("multi/stage", data, 0);
@@ -104,7 +104,7 @@ TEST(RunEmitTest, StageFiltersMessage) {
     basic_pipeline<MockSource> pipe(MockSource{});
     int sink_count = 0;
     pipe.add_stage([](basic_message<default_config>&) { return false; });
-    pipe.set_sink([&](const message_view&) { ++sink_count; });
+    pipe.set_sink(CountingSink{&sink_count});
 
     std::byte data[] = {std::byte{0x01}};
     message_view mv("filtered", data, 0);
